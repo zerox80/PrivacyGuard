@@ -1,6 +1,7 @@
 package com.example.batteryanalyzer.work
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.batteryanalyzer.BatteryAnalyzerApp
@@ -26,7 +27,7 @@ class UsageSyncWorker(
             container.usageRepository.applyEvaluation(evaluation)
 
             evaluation.appsToNotify.forEach { info ->
-                NotificationHelper.showPendingDisableNotification(context, info.appLabel)
+                NotificationHelper.showPendingDisableNotification(context, info.appLabel, info.packageName)
             }
 
             evaluation.appsToDisable.forEach { info ->
@@ -34,11 +35,15 @@ class UsageSyncWorker(
             }
 
             Result.success()
-        }.getOrElse { Result.retry() }
+        }.getOrElse { throwable ->
+            Log.e(TAG, "Usage sync failed", throwable)
+            Result.retry()
+        }
     }
 
     companion object {
         const val UNIQUE_WORK_NAME = "usage_sync_worker"
         const val NOTIFICATION_CHANNEL_ID = "usage_status_channel"
+        private const val TAG = "UsageSyncWorker"
     }
 }

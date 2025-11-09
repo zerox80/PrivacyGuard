@@ -1,6 +1,7 @@
 package com.example.batteryanalyzer
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -42,19 +43,26 @@ class MainViewModel(
             _uiState.value = _uiState.value.copy(usagePermissionGranted = hasPermission, isLoading = true)
 
             if (!hasPermission) {
-                _uiState.value = _uiState.value.copy(isLoading = false)
+                _uiState.value = AppHomeState(usagePermissionGranted = false, isLoading = false)
                 return@launch
             }
 
-            val evaluation = withContext(Dispatchers.IO) { usageAnalyzer.evaluateUsage() }
-            usageRepository.applyEvaluation(evaluation)
-
-            evaluation.appsToNotify.forEach { info ->
-                NotificationHelper.showPendingDisableNotification(appContext, info.appLabel)
+            val result = runCatching {
+                withContext(Dispatchers.IO) { usageAnalyzer.evaluateUsage() }
             }
 
-            evaluation.appsToDisable.forEach { info ->
-                applicationManager.disablePackage(info.packageName)
+            result.onSuccess { evaluation ->
+                usageRepository.applyEvaluation(evaluation)
+
+                evaluation.appsToNotify.forEach { info ->
+                    NotificationHelper.showPendingDisableNotification(appContext, info.appLabel, info.packageName)
+                }
+
+                evaluation.appsToDisable.forEach { info ->
+                    applicationManager.disablePackage(info.packageName)
+                }
+            }.onFailure { throwable ->
+                Log.e(TAG, "Failed to refresh usage", throwable)
             }
 
             _uiState.value = _uiState.value.copy(isLoading = false)

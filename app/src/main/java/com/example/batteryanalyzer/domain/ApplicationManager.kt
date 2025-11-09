@@ -19,7 +19,12 @@ class ApplicationManager(
     suspend fun disablePackage(packageName: String) = withContext(Dispatchers.IO) {
         runCatching {
             if (packageName == context.packageName) return@withContext false
-            val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
+            val appInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getApplicationInfo(packageName, 0)
+            }
             if ((appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0) {
                 return@withContext false
             }
@@ -62,13 +67,12 @@ class ApplicationManager(
     }
 
     suspend fun isPackageDisabled(packageName: String): Boolean = withContext(Dispatchers.IO) {
-        val state = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            packageManager.getApplicationEnabledSetting(packageName)
-        } else {
-            packageManager.getApplicationEnabledSetting(packageName)
-        }
-        state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
-            state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+        runCatching {
+            packageManager.getApplicationEnabledSetting(packageName) in setOf(
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+            )
+        }.getOrDefault(false)
     }
 
     companion object {

@@ -3,7 +3,6 @@ package com.example.batteryanalyzer.domain
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
-import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
@@ -22,7 +21,8 @@ class UsageAnalyzer(
 ) {
 
     private val packageManager: PackageManager = context.packageManager
-    private val usageStatsManager = context.getSystemService(UsageStatsManager::class.java)
+    private val usageStatsManager: UsageStatsManager = context.getSystemService(UsageStatsManager::class.java)
+        ?: throw IllegalStateException("UsageStatsManager not available")
 
     suspend fun evaluateUsage(): UsageEvaluation = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
@@ -40,61 +40,63 @@ class UsageAnalyzer(
             val packageName = appInfo.packageName
             packagesToRemove.remove(packageName)
 
-            val label = packageManager.getApplicationLabel(appInfo).toString()
+            val label = runCatching { packageManager.getApplicationLabel(appInfo).toString() }
+                .getOrElse { packageName }
             val existingEntity = existing[packageName]
             val lastUsed = resolveLastUsed(packageName, lastUsedMap, existingEntity, appInfo)
             val isDisabled = isPackageDisabled(packageName)
 
-            val status = when {
-                isDisabled -> AppUsageStatus.DISABLED
+            val disableAt = lastUsed?.let { it + DISABLE_THRESHOLD }
+            val notifyAt = lastUsed?.let { it + WARNING_THRESHOLD }
+
+            var scheduledDisableAt = when {
+                isDisabled -> null
+                disableAt != null -> disableAt
+                else -> null
+            }
+            var notifiedAt = if (isDisabled) null else existingEntity?.notifiedAt
+
+            val shouldDisableNow = !isDisabled && disableAt != null && now >= disableAt
+            val resolvedStatus = when {
+                isDisabled || shouldDisableNow -> AppUsageStatus.DISABLED
                 lastUsed != null && now - lastUsed <= RECENT_THRESHOLD -> AppUsageStatus.RECENT
                 else -> AppUsageStatus.RARE
             }
 
-            var scheduledDisableAt: Long? = null
-            var notifiedAt = existingEntity?.notifiedAt
-
-            if (!isDisabled) {
-                val disableAt = lastUsed?.let { it + DISABLE_THRESHOLD }
-                val notifyAt = lastUsed?.let { it + WARNING_THRESHOLD }
-                if (disableAt != null) {
-                    scheduledDisableAt = disableAt
-                    if (now >= disableAt) {
-                        appsToDisable += TrackedAppEntity(
-                            packageName = packageName,
-                            appLabel = label,
-                            lastUsedAt = lastUsed,
-                            status = AppUsageStatus.DISABLED,
-                            isDisabled = true,
-                            scheduledDisableAt = null,
-                            notifiedAt = null
-                        )
-                    } else if (notifyAt != null && now >= notifyAt && (notifiedAt == null || notifiedAt < notifyAt)) {
-                        val warningEntity = TrackedAppEntity(
-                            packageName = packageName,
-                            appLabel = label,
-                            lastUsedAt = lastUsed,
-                            status = status,
-                            isDisabled = false,
-                            scheduledDisableAt = disableAt,
-                            notifiedAt = now
-                        )
-                        appsToNotify += warningEntity
-                        notifiedAt = now
-                    }
-                } else {
+            if (shouldDisableNow) {
+                appsToDisable += TrackedAppEntity(
+                    packageName = packageName,
+                    appLabel = label,
+                    lastUsedAt = lastUsed ?: 0L,
+                    status = AppUsageStatus.DISABLED,
+                    isDisabled = true,
+                    scheduledDisableAt = null,
                     notifiedAt = null
-                }
-            } else {
+                )
+                scheduledDisableAt = null
+                notifiedAt = null
+            } else if (!isDisabled && notifyAt != null && now >= notifyAt && (notifiedAt == null || notifiedAt < notifyAt) && (disableAt == null || now < disableAt)) {
+                appsToNotify += TrackedAppEntity(
+                    packageName = packageName,
+                    appLabel = label,
+                    lastUsedAt = lastUsed ?: 0L,
+                    status = resolvedStatus,
+                    isDisabled = false,
+                    scheduledDisableAt = disableAt,
+                    notifiedAt = now
+                )
+                notifiedAt = now
+            } else if (disableAt == null) {
                 notifiedAt = null
             }
 
+            val resolvedIsDisabled = isDisabled || shouldDisableNow
             val entity = TrackedAppEntity(
                 packageName = packageName,
                 appLabel = label,
                 lastUsedAt = lastUsed ?: 0L,
-                status = status,
-                isDisabled = isDisabled,
+                status = resolvedStatus,
+                isDisabled = resolvedIsDisabled,
                 scheduledDisableAt = scheduledDisableAt,
                 notifiedAt = notifiedAt
             )
@@ -137,16 +139,22 @@ class UsageAnalyzer(
     private fun queryLastUsedTimestamps(now: Long): Map<String, Long> {
         val map = ArrayMap<String, Long>()
         val startTime = now - TimeUnit.DAYS.toMillis(30)
-        val events = usageStatsManager?.queryEvents(startTime, now) ?: return emptyMap()
+        val events = runCatching { usageStatsManager.queryEvents(startTime, now) }
+            .onFailure { throwable ->
+                Log.w(TAG, "Failed to query usage events", throwable)
+            }
+            .getOrNull() ?: return emptyMap()
         val usageEvent = UsageEvents.Event()
         while (events.hasNextEvent()) {
             events.getNextEvent(usageEvent)
             if (usageEvent.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
                 usageEvent.eventType == UsageEvents.Event.ACTIVITY_RESUMED
             ) {
-                val previous = map[usageEvent.packageName] ?: 0L
+                val packageName = usageEvent.packageName ?: continue
+                if (packageName == context.packageName || packageName.isBlank()) continue
+                val previous = map[packageName] ?: 0L
                 if (usageEvent.timeStamp > previous) {
-                    map[usageEvent.packageName] = usageEvent.timeStamp
+                    map[packageName] = usageEvent.timeStamp
                 }
             }
         }

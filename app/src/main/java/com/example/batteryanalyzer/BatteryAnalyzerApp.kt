@@ -3,6 +3,7 @@ package com.example.batteryanalyzer
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.os.Build
 import androidx.work.Configuration
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -25,7 +26,11 @@ class BatteryAnalyzerApp : Application(), Configuration.Provider {
     }
 
     private fun createNotificationChannel() {
-        val manager = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return
+        }
+
+        val manager = getSystemService(NotificationManager::class.java) ?: return
         val channel = NotificationChannel(
             UsageSyncWorker.NOTIFICATION_CHANNEL_ID,
             getString(R.string.notification_channel_name),
