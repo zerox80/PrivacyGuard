@@ -4,13 +4,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -35,34 +38,30 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTabRowState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.lerp
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import com.example.batteryanalyzer.R
 import com.example.batteryanalyzer.model.AppUsageInfo
 import com.example.batteryanalyzer.ui.components.AppUsageCard
 import com.example.batteryanalyzer.ui.state.AppHomeState
-import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AppUsageHome(
     state: AppHomeState,
@@ -76,9 +75,7 @@ fun AppUsageHome(
         stringResource(id = R.string.tab_disabled)
     )
     val tabCounts = listOf(state.recentApps.size, state.rareApps.size, state.disabledApps.size)
-    val tabState = rememberTabRowState()
     val selectedTabIndex = remember { mutableIntStateOf(0) }
-    val coroutineScope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
@@ -141,14 +138,11 @@ fun AppUsageHome(
                     )
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        PrimaryScrollableTabRow(
+                        androidx.compose.material3.TabRow(
                             selectedTabIndex = selectedTabIndex.intValue,
-                            state = tabState,
-                            edgePadding = 16.dp,
                             indicator = { tabPositions ->
                                 TabRowDefaults.Indicator(
-                                    modifier = Modifier
-                                        .tabIndicatorOffset(tabPositions[selectedTabIndex.intValue]),
+                                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex.intValue]),
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -158,7 +152,6 @@ fun AppUsageHome(
                                     selected = selectedTabIndex.intValue == index,
                                     onClick = {
                                         selectedTabIndex.intValue = index
-                                        coroutineScope.launch { tabState.animateScrollToTab(index) }
                                     },
                                     text = {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -292,6 +285,7 @@ private fun PermissionStatusChip(isGranted: Boolean) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun UsageStatsRow(
     modifier: Modifier = Modifier,
@@ -327,8 +321,9 @@ private fun UsageStatsRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun UsageStatCard(
+private fun RowScope.UsageStatCard(
     title: String,
     value: Int,
     icon: androidx.compose.ui.graphics.vector.ImageVector,

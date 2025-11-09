@@ -98,6 +98,8 @@ class MainViewModel(
     }
 
     companion object {
+        private const val TAG = "MainViewModel"
+
         fun Factory(container: AppContainer): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {

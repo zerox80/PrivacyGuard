@@ -112,25 +112,23 @@ class UsageAnalyzer(
     }
 
     private fun queryUserInstalledApps(): List<ApplicationInfo> {
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            PackageManager.ApplicationInfoFlags.of(PackageManager.MATCH_DISABLED_COMPONENTS.toLong())
-        } else {
-            @Suppress("DEPRECATION")
-            PackageManager.GET_META_DATA or PackageManager.MATCH_DISABLED_COMPONENTS
-        }
         val apps = runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.getInstalledApplications(flags)
+                packageManager.getInstalledApplications(
+                    PackageManager.ApplicationInfoFlags.of(PackageManager.MATCH_DISABLED_COMPONENTS.toLong())
+                )
             } else {
                 @Suppress("DEPRECATION")
-                packageManager.getInstalledApplications(flags)
+                packageManager.getInstalledApplications(
+                    PackageManager.GET_META_DATA or PackageManager.MATCH_DISABLED_COMPONENTS
+                )
             }
         }.getOrElse { throwable ->
             Log.w(TAG, "Failed to query installed applications", throwable)
             emptyList()
         }
 
-        return apps.filter { appInfo ->
+        return apps.filter { appInfo: ApplicationInfo ->
             appInfo.packageName != context.packageName &&
                 (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
         }
