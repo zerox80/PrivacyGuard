@@ -54,7 +54,7 @@ class MainViewModel(
     private val manualUnblockCooldown = mutableMapOf<String, Long>()
 
     private var subscriptionsStarted = false
-    private val blockThresholdMillis = TimeUnit.DAYS.toMillis(4)
+    private val blockThresholdMillisRef = AtomicLong(TimeUnit.DAYS.toMillis(4))
 
     init {
         observeSettings()
@@ -79,6 +79,7 @@ class MainViewModel(
         viewModelScope.launch {
             val state = _uiState.value
             val blockList = computeBlockList(state)
+            Log.i(TAG, "enableFirewall requested. manual=${state.manualFirewallUnblock}, blockCount=${blockList.size}")
             if (state.manualFirewallUnblock) {
                 firewallController.blockNow(blockList)
             } else {
@@ -89,6 +90,7 @@ class MainViewModel(
 
     fun disableFirewall() {
         viewModelScope.launch {
+            Log.i(TAG, "disableFirewall requested")
             firewallController.disableFirewall()
         }
     }
@@ -96,6 +98,7 @@ class MainViewModel(
     fun blockNow() {
         viewModelScope.launch {
             val blockList = computeBlockList()
+            Log.i(TAG, "blockNow requested. blockCount=${blockList.size}")
             firewallController.blockNow(blockList)
         }
     }
@@ -108,6 +111,7 @@ class MainViewModel(
                 return@launch
             }
             val blockList = computeBlockList()
+            Log.i(TAG, "allowForDuration requested for ${state.allowDurationMillis}ms. blockCount=${blockList.size}")
             firewallController.allowForDuration(state.allowDurationMillis, blockList)
         }
     }
@@ -129,10 +133,12 @@ class MainViewModel(
 
     fun setManualFirewallUnblock(enabled: Boolean) {
         viewModelScope.launch {
+            Log.i(TAG, "setManualFirewallUnblock -> $enabled")
             settingsPreferences.setManualFirewallUnblock(enabled)
             if (enabled) {
                 val state = _uiState.value.copy(manualFirewallUnblock = true)
                 val blockList = computeBlockList(state)
+                Log.i(TAG, "Manual mode enabled. Enforcing blockNow with ${blockList.size} packages")
                 firewallController.blockNow(blockList)
             }
         }
@@ -140,12 +146,13 @@ class MainViewModel(
 
     fun manualUnblockPackage(packageName: String) {
         viewModelScope.launch {
-            manualUnblockCooldown[packageName] = System.currentTimeMillis() + blockThresholdMillis
+            Log.i(TAG, "manualUnblockPackage -> $packageName")
+            manualUnblockCooldown[packageName] = System.currentTimeMillis() + blockThresholdMillisRef.get()
             val current = _uiState.value.firewallBlockedPackages.toMutableSet()
             if (current.remove(packageName)) {
+                Log.d(TAG, "Package removed from manual block set: $packageName")
                 firewallController.updateBlockedPackages(current)
             }
-            syncFirewallBlockList()
         }
     }
 
@@ -228,7 +235,8 @@ class MainViewModel(
 
     private fun computeBlockList(state: AppHomeState = _uiState.value): Set<String> {
         val now = System.currentTimeMillis()
-        val threshold = now - blockThresholdMillis
+        val thresholdMillis = blockThresholdMillisRef.get().coerceAtLeast(TimeUnit.MINUTES.toMillis(1))
+        val threshold = now - thresholdMillis
 
         val rarePackages = state.rareApps
             .filter { info ->
@@ -246,7 +254,7 @@ class MainViewModel(
             }
         }
 
-        return if (state.manualFirewallUnblock) {
+        val result = if (state.manualFirewallUnblock) {
             val manualSet = state.firewallBlockedPackages.toMutableSet()
             val additions = (rarePackages + disabledPackages).filter { pkg ->
                 val cooldownExpiry = manualUnblockCooldown[pkg]
@@ -260,11 +268,15 @@ class MainViewModel(
                 .filterNot { it == appContext.packageName }
                 .toSet()
         }
+        Log.d(TAG, "computeBlockList manual=${state.manualFirewallUnblock} -> ${result.size} packages")
+        return result
     }
 
     private suspend fun syncFirewallBlockList() {
         val desired = computeBlockList()
-        if (desired != _uiState.value.firewallBlockedPackages) {
+        val current = _uiState.value.firewallBlockedPackages
+        if (desired != current) {
+            Log.i(TAG, "syncFirewallBlockList updating firewall. desired=${desired.size}, current=${current.size}")
             firewallController.updateBlockedPackages(desired)
         }
     }
@@ -280,6 +292,7 @@ class MainViewModel(
                 if (allowDurationChanged) {
                     usageAnalyzer.updatePolicyThresholds(prefs.allowDurationMillis)
                     trafficWindowMillisRef.set(prefs.allowDurationMillis.coerceAtLeast(TimeUnit.MINUTES.toMillis(1)))
+                    blockThresholdMillisRef.set(prefs.allowDurationMillis.coerceAtLeast(TimeUnit.MINUTES.toMillis(1)))
                 }
 
                 _uiState.value = previousState.copy(

@@ -98,32 +98,6 @@ fun AppUsageHome(
     val tabCounts = listOf(state.recentApps.size, state.rareApps.size, state.disabledApps.size)
     val selectedTabIndex = remember { mutableIntStateOf(0) }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    val blockedApps = remember(
-        manualFirewallUnblock,
-        state.firewallBlockedPackages,
-        state.recentApps,
-        state.rareApps,
-        state.disabledApps
-    ) {
-        if (!manualFirewallUnblock) {
-            emptyList<AppUsageInfo>()
-        } else {
-            val lookup = (state.recentApps + state.rareApps + state.disabledApps)
-                .associateBy { it.packageName }
-            state.firewallBlockedPackages.map { pkg ->
-                lookup[pkg] ?: AppUsageInfo(
-                    packageName = pkg,
-                    appLabel = pkg,
-                    lastUsedAt = null,
-                    status = AppUsageStatus.RARE,
-                    isDisabled = false,
-                    scheduledDisableAt = null,
-                    notifiedAt = null
-                )
-            }
-        }
-    }
-
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -171,20 +145,6 @@ fun AppUsageHome(
                 }
 
                 item { Spacer(modifier = Modifier.height(20.dp)) }
-
-                if (manualFirewallUnblock) {
-                    item {
-                        ManualFirewallSection(
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp)
-                                .fillMaxWidth(),
-                            blockedApps = blockedApps,
-                            onManualUnblock = onManualUnblock
-                        )
-                    }
-
-                    item { Spacer(modifier = Modifier.height(20.dp)) }
-                }
 
                 item {
                     FirewallCard(
@@ -234,86 +194,6 @@ fun AppUsageHome(
                         onManualUnblock = onManualUnblock
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ManualFirewallSection(
-    modifier: Modifier = Modifier,
-    blockedApps: List<AppUsageInfo>,
-    onManualUnblock: (String) -> Unit
-) {
-    ElevatedCard(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = stringResource(id = R.string.firewall_manual_section_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = stringResource(id = R.string.firewall_manual_section_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (blockedApps.isEmpty()) {
-                Text(
-                    text = stringResource(id = R.string.firewall_manual_section_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    blockedApps.forEach { app ->
-                        ManualFirewallItem(app = app, onManualUnblock = onManualUnblock)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ManualFirewallItem(app: AppUsageInfo, onManualUnblock: (String) -> Unit) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = app.appLabel,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = app.packageName,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            OutlinedButton(onClick = { onManualUnblock(app.packageName) }) {
-                Text(text = stringResource(id = R.string.firewall_manual_unblock_button))
             }
         }
     }

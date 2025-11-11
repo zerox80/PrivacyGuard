@@ -23,7 +23,9 @@ class VpnFirewallService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
+        Log.d(TAG, "onStartCommand action=$action")
         if (action == ACTION_STOP) {
+            Log.i(TAG, "Stopping firewall service")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -31,6 +33,7 @@ class VpnFirewallService : VpnService() {
         if (action == ACTION_START_OR_UPDATE) {
             val blocking = intent.getBooleanExtra(EXTRA_BLOCKING, false)
             blockedPackages = intent.getStringArrayListExtra(EXTRA_BLOCK_LIST)?.toSet() ?: emptySet()
+            Log.i(TAG, "Starting/Updating firewall: blocking=$blocking blocked=${blockedPackages.size}")
             startForeground(NOTIFICATION_ID, buildNotification(blocking))
             updateVpn(blocking)
             return START_STICKY
@@ -41,6 +44,7 @@ class VpnFirewallService : VpnService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        Log.i(TAG, "VpnFirewallService destroyed")
         stopVpn()
     }
 
@@ -95,13 +99,17 @@ class VpnFirewallService : VpnService() {
     }
 
     private fun updateVpn(blocking: Boolean) {
+        Log.d(TAG, "updateVpn blocking=$blocking blockedPackages=${blockedPackages.size}")
         if (blocking) {
             if (blockedPackages.isEmpty()) {
+                Log.w(TAG, "Blocking requested but block list empty -> stopping VPN")
                 stopVpn()
             } else {
+                Log.d(TAG, "Starting VPN for blocked packages")
                 startVpn()
             }
         } else {
+            Log.d(TAG, "Not blocking -> stopping VPN")
             stopVpn()
         }
     }
@@ -122,19 +130,23 @@ class VpnFirewallService : VpnService() {
         }
 
         if (blockedPackages.isEmpty()) {
+            Log.w(TAG, "startVpn called with empty block list")
             stopVpn()
             return
         }
 
         blockedPackages.forEach { pkg ->
             if (pkg != packageName) {
-                runCatching { builder.addAllowedApplication(pkg) }
-                    .onFailure { Log.w(TAG, "Unable to include $pkg in VPN", it) }
+                runCatching {
+                    builder.addAllowedApplication(pkg)
+                    Log.v(TAG, "Allowed application in firewall VPN: $pkg")
+                }.onFailure { Log.w(TAG, "Unable to include $pkg in VPN", it) }
             }
         }
 
         vpnInterface = builder.establish()
         vpnInterface?.let { descriptor ->
+            Log.i(TAG, "VPN interface established")
             inputStream = ParcelFileDescriptor.AutoCloseInputStream(descriptor)
             drainPackets()
         }
@@ -146,13 +158,15 @@ class VpnFirewallService : VpnService() {
 
         try {
             inputStream?.close()
-        } catch (_: IOException) {
+        } catch (ex: IOException) {
+            Log.w(TAG, "Error closing input stream", ex)
         }
         inputStream = null
 
         try {
             vpnInterface?.close()
-        } catch (_: IOException) {
+        } catch (ex: IOException) {
+            Log.w(TAG, "Error closing VPN interface", ex)
         }
         vpnInterface = null
     }
@@ -166,6 +180,7 @@ class VpnFirewallService : VpnService() {
                 try {
                     val read = stream.read(buffer)
                     if (read <= 0) {
+                        Log.v(TAG, "Firewall VPN drain thread idle")
                         Thread.sleep(50)
                     }
                 } catch (_: IOException) {
@@ -176,11 +191,13 @@ class VpnFirewallService : VpnService() {
             }
             try {
                 stream.close()
-            } catch (_: IOException) {
+            } catch (ex: IOException) {
+                Log.w(TAG, "Error closing drain stream", ex)
             }
         }.apply {
             isDaemon = true
             start()
+            Log.d(TAG, "Firewall VPN drain thread started")
         }
     }
 

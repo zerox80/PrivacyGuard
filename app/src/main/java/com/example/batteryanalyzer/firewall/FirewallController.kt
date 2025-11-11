@@ -2,6 +2,7 @@ package com.example.batteryanalyzer.firewall
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -35,6 +36,7 @@ class FirewallController(
     suspend fun enableFirewall(blockPackages: Set<String>? = null, allowDurationMillis: Long = DEFAULT_ALLOW_DURATION_MILLIS) {
         val packages = blockPackages ?: preferences.preferencesFlow.first().blockedPackages
         val reactivateAt = System.currentTimeMillis() + allowDurationMillis
+        Log.i(TAG, "enableFirewall -> allowDuration=${allowDurationMillis} packages=${packages.size}")
         preferences.setState(
             isEnabled = true,
             isBlocking = false,
@@ -48,9 +50,11 @@ class FirewallController(
     suspend fun allowForDuration(allowDurationMillis: Long, blockPackages: Set<String>? = null) {
         val packages = blockPackages ?: preferences.preferencesFlow.first().blockedPackages
         if (packages.isEmpty()) {
+            Log.i(TAG, "allowForDuration -> no packages, delegating to setBlocking(false)")
             setBlocking(false, System.currentTimeMillis() + allowDurationMillis, packages)
             return
         }
+        Log.i(TAG, "allowForDuration -> allowDuration=${allowDurationMillis} keepBlocked=${packages.size}")
         preferences.setState(
             isEnabled = true,
             isBlocking = false,
@@ -63,6 +67,7 @@ class FirewallController(
 
     suspend fun blockNow(blockPackages: Set<String>? = null) {
         val packages = blockPackages ?: preferences.preferencesFlow.first().blockedPackages
+        Log.i(TAG, "blockNow -> packages=${packages.size}")
         preferences.setState(
             isEnabled = true,
             isBlocking = true,
@@ -74,6 +79,7 @@ class FirewallController(
     }
 
     suspend fun disableFirewall() {
+        Log.i(TAG, "disableFirewall")
         preferences.setState(isEnabled = false, isBlocking = false, reactivateAt = null, blockedPackages = emptySet())
         cancelAutoBlock()
         stopService()
@@ -81,6 +87,7 @@ class FirewallController(
 
     suspend fun setBlocking(blocking: Boolean, reactivateAt: Long?, blockPackages: Set<String>? = null) {
         val packages = blockPackages ?: preferences.preferencesFlow.first().blockedPackages
+        Log.i(TAG, "setBlocking -> blocking=$blocking reactivateAt=$reactivateAt packages=${packages.size}")
         preferences.setState(
             isEnabled = true,
             isBlocking = blocking,
@@ -97,7 +104,11 @@ class FirewallController(
 
     suspend fun updateBlockedPackages(blockPackages: Set<String>) {
         val current = preferences.preferencesFlow.first()
-        if (current.blockedPackages == blockPackages) return
+        if (current.blockedPackages == blockPackages) {
+            Log.d(TAG, "updateBlockedPackages -> no change (${blockPackages.size})")
+            return
+        }
+        Log.i(TAG, "updateBlockedPackages -> ${blockPackages.size} packages (was ${current.blockedPackages.size})")
 
         preferences.setState(
             isEnabled = current.isEnabled,
@@ -112,6 +123,7 @@ class FirewallController(
     }
 
     private fun startService(isBlocking: Boolean, blockList: Set<String>) {
+        Log.d(TAG, "startService -> blocking=$isBlocking blockList=${blockList.size}")
         val intent = Intent(appContext, VpnFirewallService::class.java).apply {
             action = VpnFirewallService.ACTION_START_OR_UPDATE
             putExtra(VpnFirewallService.EXTRA_BLOCKING, isBlocking)
@@ -121,6 +133,7 @@ class FirewallController(
     }
 
     private fun stopService() {
+        Log.d(TAG, "stopService")
         val intent = Intent(appContext, VpnFirewallService::class.java).apply {
             action = VpnFirewallService.ACTION_STOP
         }
@@ -129,7 +142,9 @@ class FirewallController(
 
     private fun scheduleAutoBlock(reactivateAt: Long) {
         val delay = reactivateAt - System.currentTimeMillis()
+        Log.d(TAG, "scheduleAutoBlock -> reactivateAt=$reactivateAt delay=$delay")
         if (delay <= 0) {
+            Log.w(TAG, "scheduleAutoBlock -> delay <= 0, enqueuing immediate block")
             workManager.enqueueUniqueWork(
                 AUTO_BLOCK_UNIQUE_WORK,
                 ExistingWorkPolicy.REPLACE,
@@ -148,6 +163,11 @@ class FirewallController(
     }
 
     fun cancelAutoBlock() {
+        Log.d(TAG, "cancelAutoBlock")
         workManager.cancelUniqueWork(AUTO_BLOCK_UNIQUE_WORK)
+    }
+
+    companion object {
+        private const val TAG = "FirewallController"
     }
 }

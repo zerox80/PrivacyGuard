@@ -98,7 +98,10 @@ fun AppUsageCard(
 
                 if (manualFirewallEnabled && isManuallyBlocked) {
                     Spacer(modifier = Modifier.size(12.dp))
-                    OutlinedButton(onClick = onManualUnblock) {
+                    Button(
+                        onClick = onManualUnblock,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                    ) {
                         Text(text = stringResource(id = R.string.firewall_manual_unblock_button))
                     }
                 }
