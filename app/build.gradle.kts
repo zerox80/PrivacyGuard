@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.privacyguard.privacyguard"
+    namespace = "com.aegilon.aegilon"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.privacyguard.privacyguard"
+        applicationId = "com.aegilon.aegilon"
         minSdk = 28
         targetSdk = 34
         versionCode = 1

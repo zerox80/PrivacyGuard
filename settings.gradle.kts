@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PrivacyGuard"
+rootProject.name = "Aegilon"
 include(":app")
