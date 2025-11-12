@@ -48,8 +48,11 @@ Wir behaupten nicht nur, keine Daten zu sammeln, wir haben es technisch sicherge
 2.  **Keine Cloud-Backups:** Wir haben die automatische Cloud-Sicherung von Android für die App-Daten (die Ihre Nutzungsmuster enthalten) **explizit deaktiviert**. Selbst wenn Sie Google-Backups nutzen, werden die Daten von SilentPort nicht in die Cloud hochgeladen.
 3.  **Keine Netzwerk-Berechtigung (außer für VPN):** Die App selbst (außer der VPN-Dienst) fordert keine Internet-Berechtigung an, um Daten zu senden.
 
+...
 ## Open Source und Transparenz
 
 SilentPort ist vollständig Open Source unter der GPL-Lizenz. Jeder kann den Quellcode einsehen, um alle hier gemachten Aussagen unabhängig zu überprüfen.
+
+**Unser Versprechen: Dieses Projekt ist nicht-kommerziell. Wir werden Sie niemals tracken, Ihre Daten verkaufen oder diese App monetarisieren. Niemals.**
 
 **Zusammenfassend: Wir lesen nur die minimal notwendigen Daten (App-Liste, letzter Zeitstempel), um die Kernfunktion zu erfüllen. Alle diese Daten verlassen niemals Ihr Gerät.**
