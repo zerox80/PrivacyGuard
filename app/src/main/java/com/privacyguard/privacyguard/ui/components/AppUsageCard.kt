@@ -140,7 +140,7 @@ private fun AppIcon(context: Context, packageName: String, appLabel: String) {
     val packageManager = context.packageManager
     val drawable by produceState<Drawable?>(initialValue = null, key1 = packageName) {
         value = withContext(Dispatchers.IO) {
-            AppIconCache.getOrLoad(context, packageManager, packageName)
+            AppIconCache.getOrLoad(packageManager, packageName)
         }
     }
     if (drawable != null) {
@@ -204,11 +204,11 @@ private fun StatusChip(status: AppUsageStatus) {
     )
 }
 
-private object AppIconCache {
-    private const val CACHE_SIZE = 100
+internal object AppIconCache {
+    private const val CACHE_SIZE = 150
     private val cache = object : LruCache<String, Drawable>(CACHE_SIZE) {}
 
-    fun getOrLoad(context: Context, packageManager: PackageManager, packageName: String): Drawable? {
+    fun getOrLoad(packageManager: PackageManager, packageName: String): Drawable? {
         synchronized(cache) {
             cache.get(packageName)?.let { return it }
         }
@@ -222,6 +222,12 @@ private object AppIconCache {
         }
 
         return drawable
+    }
+
+    fun preload(packageManager: PackageManager, packageNames: Collection<String>) {
+        packageNames.forEach { packageName ->
+            getOrLoad(packageManager, packageName)
+        }
     }
 }
 

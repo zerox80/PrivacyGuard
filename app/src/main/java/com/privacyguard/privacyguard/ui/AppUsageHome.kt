@@ -59,6 +59,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -72,13 +73,16 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.privacyguard.privacyguard.R
 import com.privacyguard.privacyguard.data.local.AppUsageStatus
 import com.privacyguard.privacyguard.model.AppUsageInfo
+import com.privacyguard.privacyguard.ui.components.AppIconCache
 import com.privacyguard.privacyguard.ui.components.AppUsageCard
 import com.privacyguard.privacyguard.ui.rememberDurationLabel
 import com.privacyguard.privacyguard.ui.state.AppHomeState
 import com.privacyguard.privacyguard.ui.state.FirewallUiState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -649,6 +653,18 @@ private fun AppList(
     blockedPackages: Set<String>,
     onManualUnblock: (String) -> Unit
 ) {
+    val context = LocalContext.current
+
+    LaunchedEffect(apps) {
+        if (apps.isNotEmpty()) {
+            val packageManager = context.packageManager
+            val packageNames = apps.take(24).map { it.packageName }
+            withContext(Dispatchers.IO) {
+                AppIconCache.preload(packageManager, packageNames)
+            }
+        }
+    }
+
     if (apps.isEmpty()) {
         Box(
             modifier = modifier,
